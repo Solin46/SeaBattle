@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SeaBattle.Client/SeaBattle.Client.csproj" Id="a00665b4-7d00-4aad-990b-bce0164782c0" />
+  <Project Path="SeaBattle.Common/SeaBattle.Common.csproj" Id="e5cc3217-0cac-4cfb-b9bb-086c81b57460" />
+  <Project Path="SeaBattle.Server/SeaBattle.Server.csproj" Id="8dbc4cd4-cd59-4452-abef-9eeed65476ee" />
+  <Project Path="SeaBattleSolution/SeaBattleSolution.csproj" Id="450571fb-dabc-4ad3-a0cc-cd6bb6341793" />
+</Solution>
