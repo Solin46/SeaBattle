@@ -1,4 +1,5 @@
 ﻿using SeaBattle.Common.Game;
+using SeaBattle.Common.Networking;
 using SeaBattle.Server;
 
 public class GameSession
@@ -17,8 +18,16 @@ public class GameSession
     public void Start()
     {
         // Можно отправить клиентам сигнал начала игры
-        _player1.SendMessage("Начало игры");
-        _player2.SendMessage("Начало игры");
+        _player1.Send(new NetworkMessage(
+    NetworkCommand.Hello,
+    "Начало игры"
+));
+
+        _player2.Send(new NetworkMessage(
+            NetworkCommand.Hello,
+            "Начало игры"
+        ));
+
     }
 
     public void HandlePlacement(ClientHandler player, Ship ship)

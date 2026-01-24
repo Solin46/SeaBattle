@@ -1,121 +1,38 @@
 ﻿using SeaBattle.Client.Controllers;
 using SeaBattle.Client.Networking;
+using SeaBattle.Common.Networking;
+using SeaBattle.Client.Views;
 using System;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace SeaBattle.Client
 {
     public partial class MainForm : Form
     {
+        private GameClient _client;
         private GameController _controller;
-        private UserControl _currentView;
+        private GameView _gameView;
 
-        /*public MainForm()
-        {
-            InitializeComponent();
-            StartNewGame();
-        }
-
-
-        // =========================
-        // Запуск новой игры
-        // =========================
-        private void StartNewGame()
-        {
-            _controller = new GameController();
-            ShowPlacementView();
-        }
-
-        // =========================
-        // Показать экран расстановки
-        // =========================
-        private void ShowPlacementView()
-        {
-            ClearCurrentView();
-            var placement = new Views.PlacementView(_controller);
-            placement.PlacementFinished += OnPlacementFinished;
-            _currentView = placement;
-            this.Controls.Add(_currentView);
-            _currentView.Dock = DockStyle.Fill;
-        }
-
-        private void OnPlacementFinished()
-        {
-            _controller.FinishPlacement();
-
-            ShowGameView();
-        }
-
-        // =========================
-        // Показать игровой экран
-        // =========================
-        private void ShowGameView()
-        {
-            ClearCurrentView();
-            var gameView = new Views.GameView(_controller);
-            gameView.GameFinished += OnGameFinished;
-            _currentView = gameView;
-            this.Controls.Add(_currentView);
-            _currentView.Dock = DockStyle.Fill;
-        }
-
-        // =========================
-        // Показать экран конца игры
-        // =========================
-        private void OnGameFinished()
-        {
-            ClearCurrentView();
-            var gameOver = new Views.GameOverView();
-            gameOver.RestartRequested += OnRestartRequested;
-            _currentView = gameOver;
-            this.Controls.Add(_currentView);
-            _currentView.Dock = DockStyle.Fill;
-        }
-
-        // =========================
-        // Перезапуск игры
-        // =========================
-        private void OnRestartRequested()
-        {
-            StartNewGame();
-        }
-
-        // =========================
-        // Очистка текущего UserControl
-        // =========================
-        private void ClearCurrentView()
-        {
-            if (_currentView != null)
-            {
-                this.Controls.Remove(_currentView);
-                _currentView.Dispose();
-                _currentView = null;
-            }
-        }*/
-
-        //локальное подключение к серверу на одном пк
-
-        private GameClient _networkClient;
-
-        // Элементы интерфейса
         private Button _connectButton;
         private TextBox _logBox;
 
         public MainForm()
         {
             InitializeComponent();
+            Width = 1020;
+            Height = 480;
+            this.AutoScroll = true;
+            Text = "SeaBattle Test Client";
+
             BuildUI();
         }
 
-        // =========================
-        // Создание UI для теста TCP
-        // =========================
         private void BuildUI()
         {
-            this.Width = 400;
-            this.Height = 300;
-            this.Text = "TCP Test Client";
-
+            // =========================
+            // Кнопка подключения
+            // =========================
             _connectButton = new Button
             {
                 Text = "Connect to Server",
@@ -125,18 +42,21 @@ namespace SeaBattle.Client
                 Left = 10
             };
             _connectButton.Click += ConnectButton_Click;
-            this.Controls.Add(_connectButton);
+            Controls.Add(_connectButton);
 
+            // =========================
+            // Лог сообщений от сервера
+            // =========================
             _logBox = new TextBox
             {
                 Multiline = true,
                 Top = 50,
                 Left = 10,
                 Width = 360,
-                Height = 200,
+                Height = 350,
                 ScrollBars = ScrollBars.Vertical
             };
-            this.Controls.Add(_logBox);
+            Controls.Add(_logBox);
         }
 
         // =========================
@@ -144,16 +64,34 @@ namespace SeaBattle.Client
         // =========================
         private void ConnectButton_Click(object sender, EventArgs e)
         {
-            _networkClient = new GameClient();
-            _networkClient.MessageReceived += OnMessageReceived;
+            _client = new GameClient();
+            _controller = new GameController();
+
+            _client.MessageReceived += OnServerMessage;
 
             try
             {
-                _networkClient.Connect("127.0.0.1", 5000); // Локальный сервер
+                _client.Connect("127.0.0.1", 5000);
                 Log("Connected to server.");
 
-                // Отправляем тестовое сообщение
-                _networkClient.Send("Hello from client!");
+                // Создаем GameView и добавляем на форму
+                _gameView = new GameView(_controller, _client)
+                {
+                    Top = 10,
+                    Left = 380,
+                    Width = 400,
+                    Height = 350
+                };
+                _gameView.GameFinished += OnGameFinished;
+
+                Controls.Add(_gameView);
+
+                // Для теста можно нарисовать свои корабли
+                _gameView.DrawMyShips(new (int x, int y)[] { (0, 0), (0, 1), (0, 2) });
+
+                // Отправляем Hello серверу
+                var helloMsg = new NetworkMessage(NetworkCommand.Hello, "Привет сервер!");
+                _client.Send(helloMsg);
             }
             catch (Exception ex)
             {
@@ -162,27 +100,31 @@ namespace SeaBattle.Client
         }
 
         // =========================
-        // Обработка сообщений от сервера
+        // Логирование сообщений сервера
         // =========================
-        private void OnMessageReceived(string msg)
+        private void OnServerMessage(NetworkMessage msg)
         {
-            // Проверяем, нужен ли Invoke
-            if (_logBox.InvokeRequired)
+            if (InvokeRequired)
             {
-                // Оборачиваем лямбду в Action, чтобы соответствовать Delegate
-                _logBox.Invoke(new Action(() => Log(msg)));
+                Invoke(new Action(() => Log($"SERVER: {msg.Command} | {msg.Payload}")));
             }
             else
             {
-                Log(msg);
+                Log($"SERVER: {msg.Command} | {msg.Payload}");
             }
         }
 
-        // Метод добавляет сообщение в текстовое поле или лог
-        private void Log(string msg)
+        private void Log(string text)
         {
-            _logBox.AppendText(msg + Environment.NewLine); // если _logBox — TextBox
+            _logBox.AppendText(text + Environment.NewLine);
         }
 
+        // =========================
+        // Событие окончания игры
+        // =========================
+        private void OnGameFinished()
+        {
+            MessageBox.Show("Игра окончена!");
+        }
     }
 }

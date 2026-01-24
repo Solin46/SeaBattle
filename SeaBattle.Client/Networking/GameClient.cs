@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using SeaBattle.Common.Networking;
 
 namespace SeaBattle.Client.Networking
 {
@@ -10,49 +10,67 @@ namespace SeaBattle.Client.Networking
     {
         private TcpClient _tcpClient;
         private NetworkStream _stream;
+        private Thread _listenThread;
 
-        public event Action<string> MessageReceived;
+        public event Action<NetworkMessage> MessageReceived;
 
-        public void Connect(string ip, int port)
+        public void Connect(string host, int port)
         {
             _tcpClient = new TcpClient();
-            _tcpClient.Connect(ip, port);
+            _tcpClient.Connect(host, port);
             _stream = _tcpClient.GetStream();
 
-            // Запуск чтения сообщений в отдельном потоке
-            Task.Run(() => ReceiveLoop());
+            _listenThread = new Thread(Listen);
+            _listenThread.IsBackground = true;
+            _listenThread.Start();
         }
 
-        public void Send(string message)
+        private void Listen()
         {
-            if (_stream == null) return;
-            var data = Encoding.UTF8.GetBytes(message + "\n");
-            _stream.Write(data, 0, data.Length);
-        }
+            byte[] buffer = new byte[1024];
 
-        private void ReceiveLoop()
-        {
-            var buffer = new byte[1024];
-            while (true)
+            try
             {
-                try
+                while (true)
                 {
                     int bytesRead = _stream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead == 0) break;
+                    if (bytesRead == 0)
+                        break;
 
-                    string msg = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                    string raw = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    var msg = NetworkMessage.Parse(raw);
+
                     MessageReceived?.Invoke(msg);
                 }
-                catch
-                {
-                    break;
-                }
+            }
+            catch
+            {
+                Console.WriteLine("Сервер отключился");
             }
         }
 
-        public void Close()
+        public void Send(NetworkMessage msg)
         {
-            _stream?.Close();
+            if (_tcpClient?.Connected == true)
+            {
+                byte[] data = Encoding.UTF8.GetBytes(msg.ToString());
+                _stream.Write(data, 0, data.Length);
+            }
+        }
+        //Отправка расстановки и выстрелов
+        public void SendShipPlacement(string payload)
+        {
+            Send(new NetworkMessage(NetworkCommand.PlaceShips, payload));
+        }
+
+        public void SendShot(int x, int y)
+        {
+            Send(new NetworkMessage(NetworkCommand.Shoot, $"{x},{y}"));
+        }
+
+
+        public void Disconnect()
+        {
             _tcpClient?.Close();
         }
     }

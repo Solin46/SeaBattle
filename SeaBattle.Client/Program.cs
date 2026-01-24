@@ -8,10 +8,15 @@ namespace SeaBattle.Client
         [STAThread] //Single Threaded Apartment - нужен для корректной работы winfowm
         static void Main() //точка входа программы
         {
+            /*// Запускаем тест NetworkMessage
+            SeaBattle.Client.Tests.NetworkMessageTest.Run();*/
+
+            
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
             Application.Run(new MainForm()); //запуск UI цикла
         }
     }
 }
+
+

@@ -55,6 +55,7 @@
     </Compile>
     <Compile Include="Models\ClientGameState.cs" />
     <Compile Include="Networking\GameClient.cs" />
+    <Compile Include="NetworkMessageTest.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Views\GameOverView.cs">

@@ -50,6 +50,8 @@
     <Compile Include="Game\GameBoard.cs" />
     <Compile Include="Game\Player.cs" />
     <Compile Include="Game\Ship.cs" />
+    <Compile Include="Networking\NetworkCommand.cs" />
+    <Compile Include="Networking\NetworkMessage.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup />
