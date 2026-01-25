@@ -31,7 +31,13 @@ namespace SeaBattle.Client.Views
         private void BuildFields()
         {
             const int size = 30;
-            var topOffset = 20;
+            const int board = 10;
+            const int topOffset = 20;
+            const int enemyOffset = 340;
+
+            this.Width = enemyOffset + size * board + 20;
+            this.Height = topOffset + size * board + 20;
+
 
             // Мое поле
             for (int y = 0; y < 10; y++)
@@ -53,7 +59,6 @@ namespace SeaBattle.Client.Views
             }
 
             // Вражеское поле
-            var enemyOffset = 350;
             for (int y = 0; y < 10; y++)
             {
                 for (int x = 0; x < 10; x++)
@@ -72,6 +77,7 @@ namespace SeaBattle.Client.Views
                     Controls.Add(btn);
                 }
             }
+
         }
 
         private void EnemyCell_Click(object sender, EventArgs e)
@@ -120,6 +126,20 @@ namespace SeaBattle.Client.Views
                         break;
                     }
 
+                case NetworkCommand.EnemyShot:
+                    {
+                        var parts = msg.Payload.Split(',');
+                        int x = int.Parse(parts[0]);
+                        int y = int.Parse(parts[1]);
+                        string result = parts[2];
+
+                        _myField[x, y].BackColor =
+                            result == "hit" || result == "sunk"
+                                ? Color.Red
+                                : Color.Blue;
+                        break;
+                    }
+
                 case NetworkCommand.GameOver:
                     GameFinished?.Invoke();
                     break;
@@ -138,6 +158,32 @@ namespace SeaBattle.Client.Views
             {
                 _myField[x, y].BackColor = Color.Gray; // отображение своих кораблей
             }
+        }
+
+        // Обработка ответа на СВОЙ выстрел
+        public void HandleShotResult(string payload)
+        {
+            var parts = payload.Split(',');
+            int x = int.Parse(parts[0]);
+            int y = int.Parse(parts[1]);
+            string result = parts[2];
+
+            // Красим клетку на вражеском поле
+            _enemyField[x, y].BackColor =
+                result.ToLower() == "hit" ? Color.Red : Color.Blue;
+        }
+
+        // Обработка выстрела ПРОТИВ ТЕБЯ
+        public void HandleEnemyShot(string payload)
+        {
+            var parts = payload.Split(',');
+            int x = int.Parse(parts[0]);
+            int y = int.Parse(parts[1]);
+            string result = parts[2];
+
+            // Красим клетку на своём поле
+            _myField[x, y].BackColor =
+                result.ToLower() == "hit" ? Color.Red : Color.Blue;
         }
 
     }

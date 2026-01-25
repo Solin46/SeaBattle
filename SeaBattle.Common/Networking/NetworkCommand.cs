@@ -8,13 +8,14 @@ namespace SeaBattle.Common.Networking
 {
     public enum NetworkCommand
     {
-        Hello,          // клиент подключился
-        PlaceShips,     // клиент закончил расстановку
-        Shoot,          // выстрел: x,y
-        ShotResult,     // результат выстрела
-        GameOver,       // конец игры
-        Restart,        // переиграть
-        Error           // ошибка
+        Hello,        // тест / подключение
+        Error,        // ошибка
+        PlaceShips,   // клиент отправил расстановку
+        GameStart,    // сервер сообщает: игра началась
+        Shoot,        // выстрел (x,y)
+        ShotResult,   // результат твоего выстрела
+        EnemyShot,    // по тебе стреляли (x,y,hit/miss)
+        GameOver      // конец игры
     }
 }
 

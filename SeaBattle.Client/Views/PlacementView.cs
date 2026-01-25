@@ -20,6 +20,20 @@ namespace SeaBattle.Client.Views
             InitializeComponent();
             _controller = controller;
 
+            this.Width = 600;
+            this.Height = 420;
+
+            _gridPanel.Width = 10 * 30;
+            _gridPanel.Height = 10 * 30;
+
+            _gridPanel.Left = 0;
+            _gridPanel.Top = 55;
+
+            _shipsCounterLabel.Left = _gridPanel.Right + 10;
+            _shipsCounterLabel.Top = _gridPanel.Top;
+
+
+
             BuildGrid();
             ConfigureShipsCounterLabel();
             UpdateShipsCounter();
