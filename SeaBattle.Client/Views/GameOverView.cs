@@ -17,7 +17,7 @@ namespace SeaBattle.Client.Views
         {
             var lbl = new Label
             {
-                Text = isWinner ? "🎉 Вы победили!" : "😢 Вы проиграли",
+                Text = isWinner ? "Вы победили!" : "Вы проиграли",
                 Top = 20,
                 Left = 40,
                 AutoSize = true,
@@ -32,9 +32,31 @@ namespace SeaBattle.Client.Views
                 Width = 140,
                 Height = 40,
                 Top = 70,
-                Left = 40
+                Left = 40,
+                Tag = false //нажата ли кнопка
             };
-            restartBtn.Click += (s, e) => RestartRequested?.Invoke();
+            restartBtn.Click += (s, e) =>
+            {
+                var button = (Button)s;
+
+                // Проверяем, не нажата ли уже кнопка
+                if ((bool)button.Tag == true)
+                    return;
+
+                // Помечаем как нажатую
+                button.Tag = true;
+
+                // Отключаем кнопку
+                button.Enabled = false;
+                button.Text = "Перезапуск...";
+                button.BackColor = System.Drawing.Color.Gray;
+
+                // Немного ждем для визуальной обратной связи
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(100);
+
+                RestartRequested?.Invoke();
+            };
             Controls.Add(restartBtn);
         }
     }

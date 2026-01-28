@@ -17,6 +17,7 @@ namespace SeaBattle.Common.Networking
         Shoot,        // выстрел (x,y)
         ShotResult,   // результат твоего выстрела
         EnemyShot,    // по тебе стреляли (x,y,hit/miss)
+        OpponentDisconnected,
         GameOver      // конец игры
     }
 }

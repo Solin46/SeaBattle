@@ -3,6 +3,7 @@ using SeaBattle.Common.Game;
 using SeaBattle.Common.Networking;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -27,7 +28,7 @@ namespace SeaBattle.Server
         private TcpClient _currentTurn;   // кто сейчас ходит
         private TcpClient _firstPlayer;   // кто первым расставился
 
-
+        private bool _gameFinished = false;
         public void Start(int port = 5000)
         {
             _listener = new TcpListener(IPAddress.Any, port);
@@ -43,41 +44,107 @@ namespace SeaBattle.Server
         {
             while (_running)
             {
-                var client = _listener.AcceptTcpClient();
-
-                if (_player1 == null)
+                try
                 {
-                    _player1 = client;
-                    Send(_player1, new NetworkMessage(
-                        NetworkCommand.PlayerRole, "player1"));
+                    var client = _listener.AcceptTcpClient();
+                    Console.WriteLine($"Новое подключение от {client.Client.RemoteEndPoint}");
 
-                    Console.WriteLine("Подключился игрок 1");
-                    new Thread(() => ListenClient(_player1)).Start();
+                    // Проверяем и очищаем "мертвые" соединения
+                    CheckAndCleanDeadConnections();
+
+                    // Сбрасываем состояние игры при новом подключении
+                    _gameFinished = false;
+
+                    if (_player1 == null || !IsClientConnected(_player1))
+                    {
+                        _player1 = client;
+                        _player1Ready = false;
+                        _board1 = null;
+
+                        Console.WriteLine("Назначен как player1");
+                        Send(_player1, new NetworkMessage(NetworkCommand.PlayerRole, "player1"));
+
+                        new Thread(() => ListenClient(_player1)).Start();
+                    }
+                    else if (_player2 == null || !IsClientConnected(_player2))
+                    {
+                        _player2 = client;
+                        _player2Ready = false;
+                        _board2 = null;
+
+                        Console.WriteLine("Назначен как player2");
+                        Send(_player2, new NetworkMessage(NetworkCommand.PlayerRole, "player2"));
+
+                        new Thread(() => ListenClient(_player2)).Start();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Отклонено: сервер полон");
+                        Send(client, new NetworkMessage(NetworkCommand.Error, "Server full"));
+                        client.Close();
+                    }
                 }
-                else if (_player2 == null)
+                catch (Exception ex)
                 {
-                    _player2 = client;
-                    Send(_player2, new NetworkMessage(
-                        NetworkCommand.PlayerRole, "player2"));
-
-                    Console.WriteLine("Подключился игрок 2");
-                    new Thread(() => ListenClient(_player2)).Start();
+                    Console.WriteLine($"Ошибка AcceptClients: {ex.Message}");
                 }
+            }
+        }
+
+        private bool IsClientConnected(TcpClient client)
+        {
+            if (client == null) return false;
+
+            try
+            {
+                // Простая проверка подключения
+                return client.Connected &&
+                       client.Client != null &&
+                       client.Client.Connected;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void CheckAndCleanDeadConnections()
+        {
+            // Проверяем player1
+            if (_player1 != null && !IsClientConnected(_player1))
+            {
+                Console.WriteLine("Обнаружен отключенный player1, очистка...");
+                try { _player1.Close(); } catch { }
+                _player1 = null;
+                _player1Ready = false;
+                _board1 = null;
+            }
+
+            // Проверяем player2
+            if (_player2 != null && !IsClientConnected(_player2))
+            {
+                Console.WriteLine("Обнаружен отключенный player2, очистка...");
+                try { _player2.Close(); } catch { }
+                _player2 = null;
+                _player2Ready = false;
+                _board2 = null;
             }
         }
 
 
         private void ListenClient(TcpClient client)
         {
-            var stream = client.GetStream();
-            byte[] buffer = new byte[1024];
+            NetworkStream stream = null;
 
             try
             {
+                stream = client.GetStream();
+                byte[] buffer = new byte[1024];
+
                 while (true)
                 {
                     int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead == 0)
+                    if (bytesRead == 0) //клиент отключился
                         break;
 
                     string raw = Encoding.UTF8.GetString(buffer, 0, bytesRead);
@@ -104,52 +171,6 @@ namespace SeaBattle.Server
                         if (defenderBoard == null || defenderClient == null)
                             continue;
 
-                        /*var result = defenderBoard.Shoot(x, y);
-
-                        // если уже стреляли — просто игнорируем
-                        if (result == ShotResult.AlreadyShot)
-                            continue;
-
-                        string payload;
-
-                        if (result == ShotResult.Miss)
-                        {
-                            _currentTurn = client == _player1 ? _player2 : _player1;
-                            payload = $"{x},{y},miss";
-                        }
-                        else if (result == ShotResult.Hit)
-                        {
-                            payload = $"{x},{y},hit";
-                        }
-                        else // ShotResult.Sunk
-                        {
-                            var ship = defenderBoard.GetShipAt(x, y);
-
-                            var shipCells = string.Join("|",
-                                ship.Decks.Select(d => $"{d.X}:{d.Y}")
-                            );
-
-                            payload = $"{x},{y},sunk,{shipCells}";
-                        }
-
-                        Send(attacker, new NetworkMessage(
-                            NetworkCommand.ShotResult,
-                            payload
-                        ));
-
-                        Send(defenderClient, new NetworkMessage(
-                            NetworkCommand.EnemyShot,
-                            payload
-                        ));
-
-                        // сервер
-                        Send(attacker, new NetworkMessage(
-                            NetworkCommand.YourTurn, "false"
-                        ));
-
-                        Send(defenderClient, new NetworkMessage(
-                            NetworkCommand.YourTurn, "true"
-                        ));*/
 
                         var result = defenderBoard.Shoot(x, y);
 
@@ -204,7 +225,14 @@ namespace SeaBattle.Server
                         {
                             string winner = client == _player1 ? "player1" : "player2";
 
-                            SendToBoth(new NetworkMessage(NetworkCommand.GameOver, winner));
+                            // Проверяем, не закончилась ли уже игра
+                            if (!_gameFinished)
+                            {
+                                _gameFinished = true; // Помечаем игру как завершенную
+
+                                Console.WriteLine($"=== ИГРА ОКОНЧЕНА. ПОБЕДИТЕЛЬ: {winner} ===");
+                                SendToBoth(new NetworkMessage(NetworkCommand.GameOver, winner));
+                            }
                         }
                     }
 
@@ -247,16 +275,6 @@ namespace SeaBattle.Server
                             _firstPlayer = client;
                         }
 
-                        /*if (_player1Ready && _player2Ready)
-                        {
-                            _currentTurn = _firstPlayer;
-
-                            SendToBoth(new NetworkMessage(
-                                NetworkCommand.GameStart,
-                                _currentTurn == _player1 ? "player1" : "player2"
-                            ));
-                        }*/
-
                         if (_player1Ready && _player2Ready)
                         {
                             _currentTurn = _firstPlayer;
@@ -275,28 +293,195 @@ namespace SeaBattle.Server
                                 _currentTurn == _player2 ? "true" : "false"
                             ));
                         }
-
-
                         continue;
                     }
                 }
             }
-            catch
+            catch (IOException ioex)
             {
-                Console.WriteLine("Клиент отключился");
+                Console.WriteLine($"Клиент отключился (IOException): {ioex.Message}");
+            }
+            catch (SocketException sex)
+            {
+                Console.WriteLine($"Клиент отключился (SocketException): {sex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в ListenClient: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    // Закрываем соединение
+                    if (stream != null)
+                    {
+                        stream.Close();
+                        stream.Dispose();
+                    }
+
+                    if (client != null && client.Connected)
+                    {
+                        client.Close();
+                    }
+                }
+                catch { }
+
+                // Очищаем состояние
+                CleanupPlayer(client);
             }
         }
-        private void SendToBoth(NetworkMessage msg)
+
+        private void CleanupPlayer(TcpClient disconnectedClient)
         {
-            var data = Encoding.UTF8.GetBytes(msg.ToString());
-            _player1?.GetStream().Write(data, 0, data.Length);
-            _player2?.GetStream().Write(data, 0, data.Length);
+            string disconnectedPlayer = disconnectedClient == _player1 ? "player1" : "player2";
+            Console.WriteLine($"Очистка {disconnectedPlayer}");
+
+            if (disconnectedClient == _player1)
+            {
+                _player1 = null;
+                _player1Ready = false;
+                _board1 = null;
+
+                // Если игрок 2 еще в игре - НЕ отправляем GameOver, а сбрасываем его состояние
+                if (_player2 != null && _player2.Connected)
+                {
+                    Console.WriteLine("Сбрасываем состояние player2 для новой игры");
+
+                    // Отправляем сообщение о сбросе
+                    Send(_player2, new NetworkMessage(
+                        NetworkCommand.OpponentDisconnected, // Новая команда
+                        ""
+                    ));
+
+                    // Сбрасываем готовность player2
+                    _player2Ready = false;
+                    _board2 = null;
+                }
+            }
+            else if (disconnectedClient == _player2)
+            {
+                _player2 = null;
+                _player2Ready = false;
+                _board2 = null;
+
+                if (_player1 != null && _player1.Connected)
+                {
+                    Console.WriteLine("Сбрасываем состояние player1 для новой игры");
+
+                    Send(_player1, new NetworkMessage(
+                        NetworkCommand.OpponentDisconnected,
+                        ""
+                    ));
+
+                    _player1Ready = false;
+                    _board1 = null;
+                }
+            }
+
+            ResetGameState();
         }
 
+        private void ResetGameState()
+        {
+            Console.WriteLine("Сброс состояния игры");
+            // Сбрасываем флаг завершения игры
+            _gameFinished = false;
+
+            // Если один игрок отключился - сбрасываем готовность второго
+            if (_player1 == null && _player2 != null)
+            {
+                _player2Ready = false;
+                _board2 = null;
+                Send(_player2, new NetworkMessage(NetworkCommand.Hello, "Ожидание второго игрока..."));
+            }
+            else if (_player2 == null && _player1 != null)
+            {
+                _player1Ready = false;
+                _board1 = null;
+                Send(_player1, new NetworkMessage(NetworkCommand.Hello, "Ожидание второго игрока..."));
+            }
+
+            _currentTurn = null;
+            _firstPlayer = null;
+        }
         private void Send(TcpClient client, NetworkMessage msg)
         {
-            var data = Encoding.UTF8.GetBytes(msg.ToString());
-            client.GetStream().Write(data, 0, data.Length);
+            if (client == null || !client.Connected)
+            {
+                Console.WriteLine($"Попытка отправить сообщение отключенному клиенту: {msg.Command}");
+                return;
+            }
+
+            try
+            {
+                var data = Encoding.UTF8.GetBytes(msg.ToString());
+                var stream = client.GetStream();
+
+                // Проверяем, доступен ли поток для записи
+                if (stream.CanWrite)
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+                else
+                {
+                    Console.WriteLine($"Поток клиента недоступен для записи: {msg.Command}");
+                }
+            }
+            catch (SocketException sex)
+            {
+                Console.WriteLine($"SocketException при отправке {msg.Command}: {sex.Message}");
+                // Помечаем клиента как отключенного
+                if (client == _player1)
+                {
+                    _player1 = null;
+                    _player1Ready = false;
+                }
+                else if (client == _player2)
+                {
+                    _player2 = null;
+                    _player2Ready = false;
+                }
+            }
+            catch (IOException ioex)
+            {
+                Console.WriteLine($"IOException при отправке {msg.Command}: {ioex.Message}");
+                // Клиент разорвал соединение
+                try { client.Close(); } catch { }
+
+                if (client == _player1)
+                {
+                    _player1 = null;
+                    _player1Ready = false;
+                    Console.WriteLine("Игрок 1 отключился (при отправке)");
+                }
+                else if (client == _player2)
+                {
+                    _player2 = null;
+                    _player2Ready = false;
+                    Console.WriteLine("Игрок 2 отключился (при отправке)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка отправки {msg.Command}: {ex.Message}");
+            }
+        }
+
+        private void SendToBoth(NetworkMessage msg)
+        {
+            // Отправляем только подключенным клиентам
+            if (_player1 != null && _player1.Connected)
+            {
+                try { Send(_player1, msg); }
+                catch { /* игнорируем, так как Send уже обрабатывает ошибки */ }
+            }
+
+            if (_player2 != null && _player2.Connected)
+            {
+                try { Send(_player2, msg); }
+                catch { /* игнорируем */ }
+            }
         }
 
 

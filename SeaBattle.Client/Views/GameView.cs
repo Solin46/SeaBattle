@@ -240,19 +240,6 @@ namespace SeaBattle.Client.Views
 
                 case NetworkCommand.GameOver:
                     {
-                        /*string winner = msg.Payload; // "player1" / "player2"
-
-                        bool iWon =
-                            (IsPlayer1 && winner == "player1") ||
-                            (!IsPlayer1 && winner == "player2");
-
-                        MessageBox.Show(
-                            iWon ? "🎉 Вы победили!" : "😢 Вы проиграли",
-                            "Игра окончена"
-                        );
-
-                        GameFinished?.Invoke();*/
-
                         // ТОЛЬКО передаем сообщение дальше, не обрабатываем сами
                         ServerMessageForwarded?.Invoke(msg);
                         break;

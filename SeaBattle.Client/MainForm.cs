@@ -243,6 +243,72 @@ namespace SeaBattle.Client
                                          (_roleReceived && msg.Payload == "player2" && !_isPlayer1);
                     ShowGameOver(isWinnerNormal);
                     break;
+
+                case NetworkCommand.OpponentDisconnected:
+                    Log("Соперник отключился. Пожалуйста, перезапустите сервер...");
+                    HandleOpponentDisconnected();
+                    break;
+            }
+        }
+
+        private void HandleOpponentDisconnected()
+        {
+            Log("=== ОБРАБОТКА ОТКЛЮЧЕНИЯ СОПЕРНИКА ===");
+
+            // 1. Удаляем GameView если игра была активна
+            if (_gameView != null)
+            {
+                Log("Удаление GameView");
+                Controls.Remove(_gameView);
+                _gameView.Dispose();
+                _gameView = null;
+            }
+
+            // 2. Удаляем GameOverView если он есть
+            if (_gameOverView != null)
+            {
+                Log("Удаление GameOverView");
+                Controls.Remove(_gameOverView);
+                _gameOverView.Dispose();
+                _gameOverView = null;
+            }
+
+            // 3. Сохраняем нашу расстановку кораблей
+            var ourShips = _controller.State.MyBoard.Ships.ToList();
+
+            // 4. Полностью сбрасываем контроллер
+            _controller.RestartGame();
+
+            // 5. Восстанавливаем нашу расстановку
+            foreach (var ship in ourShips)
+            {
+                _controller.State.MyBoard.PlaceShip(ship);
+            }
+
+            // 6. Сбрасываем роль (она останется той же при переподключении)
+            // _roleReceived и _isPlayer1 НЕ сбрасываем!
+
+            // 7. Показываем сообщение
+            Log("Ожидание нового соперника...");
+
+            // Можно показать сообщение пользователю
+            MessageBox.Show("Соперник отключился. Ожидание нового игрока...",
+                           "Соперник отключился",
+                           MessageBoxButtons.OK,
+                           MessageBoxIcon.Information);
+
+            // 8. Если мы в PlacementView - просто ждем
+            // Если нет - создаем PlacementView заново
+            if (_placementView == null)
+            {
+                Log("Создание PlacementView для ожидания");
+                CreatePlacementView();
+            }
+            else
+            {
+                Log("Уже в PlacementView, просто ждем");
+                // Обновляем статус
+                Log("Готовы к игре. Ожидаем второго игрока...");
             }
         }
 
@@ -295,59 +361,107 @@ namespace SeaBattle.Client
 
         private void ShowGameOver(bool isWinner)
         {
-            Log($"Показать GameOverView. Победитель: {(isWinner ? "Вы" : "Противник")}");
+            Log($"=== ПОКАЗЫВАЕМ GAMEOVER: {(isWinner ? "ПОБЕДА" : "ПОРАЖЕНИЕ")} ===");
 
-            // Удаляем GameView
-            if (_gameView != null)
-            {
-                Controls.Remove(_gameView);
-                _gameView.Dispose();
-                _gameView = null;
-            }
+            // УДАЛЯЕМ ВСЕ СТАРЫЕ VIEW
+            RemoveGameViews();
 
-            // Показываем GameOverView
+            // СОЗДАЕМ НОВЫЙ GameOverView
+            Log("Создание нового GameOverView");
             _gameOverView = new GameOverView(isWinner)
             {
                 Top = 200,
                 Left = 500,
-                Width = 220,
-                Height = 150
+                Width = 250,  // Чуть шире
+                Height = 150,
+                BackColor = Color.LightYellow,  // Делаем видимым
+                BorderStyle = BorderStyle.FixedSingle
             };
 
             _gameOverView.RestartRequested += OnRestartRequested;
             Controls.Add(_gameOverView);
+            _gameOverView.BringToFront();
 
+            // ОБНОВЛЯЕМ ФОРМУ
+            this.Refresh();
+
+            Log($"GameOverView создан. Всего контролов: {Controls.Count}");
             Log(isWinner ? "Вы победили!" : "Вы проиграли");
         }
 
-        private void OnRestartRequested()
+        /*private void OnRestartRequested()
         {
-            Log("Перезапуск игры...");
+            Log("=== НАЧАЛО ПЕРЕЗАПУСКА ===");
 
-            // Полностью очищаем состояние
+            // 1. ОТПИСЫВАЕМСЯ ОТ СОБЫТИЯ ПЕРЕД УДАЛЕНИЕМ
+            if (_gameOverView != null)
+            {
+                _gameOverView.RestartRequested -= OnRestartRequested;
+            }
+
+            // 2. УДАЛЯЕМ ВСЕ View СРАЗУ
+            RemoveGameViews();
+
+            // 3. ОЧИЩАЕМ СОСТОЯНИЕ
             _controller.RestartGame();
             _roleReceived = false;
             _isPlayer1 = false;
 
-            // Отключаемся от сервера
-            _client?.Disconnect();
-
-            // Удаляем GameOverView
-            if (_gameOverView != null)
+            // 4. ОТКЛЮЧАЕМСЯ ОТ СЕРВЕРА
+            if (_client != null)
             {
-                Controls.Remove(_gameOverView);
-                _gameOverView.Dispose();
-                _gameOverView = null;
+                try
+                {
+                    _client.Disconnect();
+                }
+                catch { }
+                _client = null;
             }
 
-            // Создаем новое подключение
+            // 5. ЖДЕМ, ЧТОБЫ ВСЕ ОЧИСТИЛОСЬ
+            Application.DoEvents(); // Обрабатываем все сообщения
+            System.Threading.Thread.Sleep(100);
+
+            Log("=== СОЗДАНИЕ НОВОГО ПОДКЛЮЧЕНИЯ ===");
+
+            // 6. СОЗДАЕМ НОВОЕ ПОДКЛЮЧЕНИЕ
             ConnectButton_Click(null, EventArgs.Empty);
+
+            Log("=== ПЕРЕЗАПУСК ЗАВЕРШЕН ===");
+        }*/
+        private void OnRestartRequested()
+        {
+            Log("=== НАЧАТ ПЕРЕЗАПУСК ===");
+
+            // 1. Отписываемся от события
+            if (_gameOverView != null)
+            {
+                _gameOverView.RestartRequested -= OnRestartRequested;
+            }
+
+            // 2. Удаляем GameOverView (НЕ отключаемся от сервера!)
+            RemoveGameViews();
+
+            // 3. Очищаем ЛОКАЛЬНОЕ состояние контроллера
+            _controller.RestartGame();
+            // НЕ сбрасываем роль! Мы остаемся тем же игроком
+            // _roleReceived и _isPlayer1 НЕ меняем!
+
+            Log("=== СОЗДАЕМ PlacementView ===");
+
+            // 4. Просто создаем новый PlacementView
+            CreatePlacementView();
+
+            Log("Ожидание готовности соперника...");
         }
 
         private void RemoveGameViews()
         {
+            Log("=== УДАЛЕНИЕ ВСЕХ VIEW ===");
+
             if (_placementView != null)
             {
+                Log("Удаление PlacementView");
                 Controls.Remove(_placementView);
                 _placementView.Dispose();
                 _placementView = null;
@@ -355,6 +469,7 @@ namespace SeaBattle.Client
 
             if (_gameView != null)
             {
+                Log("Удаление GameView");
                 Controls.Remove(_gameView);
                 _gameView.Dispose();
                 _gameView = null;
@@ -362,10 +477,21 @@ namespace SeaBattle.Client
 
             if (_gameOverView != null)
             {
+                Log("Удаление GameOverView");
+
+                // ВАЖНО: отписываемся от события!
+                _gameOverView.RestartRequested -= OnRestartRequested;
+
                 Controls.Remove(_gameOverView);
                 _gameOverView.Dispose();
                 _gameOverView = null;
             }
+
+            // ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ ФОРМЫ
+            this.Refresh();
+            Application.DoEvents();
+
+            Log($"Удаление завершено. Контролов на форме: {Controls.Count}");
         }
 
         private void Log(string text)
