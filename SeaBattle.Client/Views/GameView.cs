@@ -15,6 +15,17 @@ namespace SeaBattle.Client.Views
         private readonly Button[,] _myField = new Button[10, 10];
         private readonly Button[,] _enemyField = new Button[10, 10];
 
+        private enum ViewCellState
+        {
+            Unknown,
+            Miss,
+            Hit,
+            Sunk
+        }
+        private ViewCellState[,] _myView = new ViewCellState[10, 10];
+        private ViewCellState[,] _enemyView = new ViewCellState[10, 10];
+
+
         public event Action GameFinished;
 
         public GameView(GameController controller, GameClient client)
@@ -85,12 +96,13 @@ namespace SeaBattle.Client.Views
             var btn = (Button)sender;
             var (x, y) = ((int, int))btn.Tag;
 
+            // ❗ если уже стреляли — ничего не делаем
+            if (_enemyView[x, y] != ViewCellState.Unknown)
+                return;
+
             // Отправляем сообщение на сервер
             var msg = new NetworkMessage(NetworkCommand.Shoot, $"{x},{y}");
             _client.Send(msg);
-
-            // Для теста сразу закрашиваем клетку как промах (сервер пока фиктивный)
-            btn.BackColor = Color.Blue;
         }
 
         private void OnServerMessage(NetworkMessage msg)
@@ -109,19 +121,43 @@ namespace SeaBattle.Client.Views
         {
             switch (msg.Command)
             {
+                //апдейт клетки по результату выстрела
                 case NetworkCommand.ShotResult:
                     {
-                        // payload: "x,y,hit/miss"
                         var parts = msg.Payload.Split(',');
+
                         int x = int.Parse(parts[0]);
                         int y = int.Parse(parts[1]);
-                        string result = parts[2];
+                        string result = parts[2].ToLower();
 
-                        // Обновляем ВРАЖЕСКОЕ поле
-                        _enemyField[x, y].BackColor =
-                            result.ToLower() == "hit"
-                                ? Color.Red
-                                : Color.Blue;
+                        if (result == "miss")
+                        {
+                            UpdateEnemyCell(x, y, ViewCellState.Miss);
+                            break;
+                        }
+
+                        if (result == "hit")
+                        {
+                            UpdateEnemyCell(x, y, ViewCellState.Hit);
+                            break;
+                        }
+
+                        if (result == "sunk")
+                        {
+                            // parts[3] = "x1:y1|x2:y2|x3:y3"
+                            var shipCells = parts[3].Split('|');
+
+                            foreach (var cell in shipCells)
+                            {
+                                var xy = cell.Split(':');
+                                int sx = int.Parse(xy[0]);
+                                int sy = int.Parse(xy[1]);
+
+                                UpdateEnemyCell(sx, sy, ViewCellState.Sunk);
+                            }
+
+                            break;
+                        }
 
                         break;
                     }
@@ -184,6 +220,36 @@ namespace SeaBattle.Client.Views
             // Красим клетку на своём поле
             _myField[x, y].BackColor =
                 result.ToLower() == "hit" ? Color.Red : Color.Blue;
+        }
+        //метод цвета
+        private static Color GetColor(ViewCellState state)
+        {
+            switch (state)
+            {
+                case ViewCellState.Miss:
+                    return Color.Blue;
+                case ViewCellState.Hit:
+                    return Color.Red;
+                case ViewCellState.Sunk:
+                    return Color.Black;
+                default:
+                    return Color.White;
+            }
+        }
+
+        //обновление клетки
+        private void UpdateEnemyCell(int x, int y, ViewCellState newState)
+        {
+            var old = _enemyView[x, y];
+
+            if (old == ViewCellState.Sunk)
+                return;
+
+            if (old == ViewCellState.Hit && newState == ViewCellState.Miss)
+                return;
+
+            _enemyView[x, y] = newState;
+            _enemyField[x, y].BackColor = GetColor(newState);
         }
 
     }

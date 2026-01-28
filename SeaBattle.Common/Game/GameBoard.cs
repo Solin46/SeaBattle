@@ -124,5 +124,12 @@ namespace SeaBattle.Common.Game
         {
             return Ships.All(s => s.IsSunk());
         }
+
+        //определение нужного корабля
+        public Ship GetShipAt(int x, int y)
+        {
+            return Ships.FirstOrDefault(s => s.Contains(x, y));
+        }
+
     }
 }

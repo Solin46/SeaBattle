@@ -85,13 +85,7 @@ namespace SeaBattle.Client
                     //Height = 500
                     Anchor = AnchorStyles.Top | AnchorStyles.Left
                 };
-                /*_gameView.GameFinished += OnGameFinished;
-
-                Controls.Add(_gameView);
-
-                // Для теста можно нарисовать свои корабли
-                _gameView.DrawMyShips(new (int x, int y)[] { (0, 0), (0, 1), (0, 2) });*/
-
+                
                 // Отправляем Hello серверу
                 var helloMsg = new NetworkMessage(NetworkCommand.Hello, "Привет сервер!");
                 _client.Send(helloMsg);
@@ -153,8 +147,6 @@ namespace SeaBattle.Client
                     break;
             }
         }
-
-
         private void OnPlacementFinished()
         {
             // 1. отправляем расстановку

@@ -1,4 +1,5 @@
-﻿using SeaBattle.Common.Game;
+﻿using SeaBattle.Common.Enums;
+using SeaBattle.Common.Game;
 using SeaBattle.Common.Networking;
 using System;
 using System.Collections.Generic;
@@ -74,7 +75,7 @@ namespace SeaBattle.Server
                     if (bytesRead == 0)
                         break;
 
-                    // ← ВАЖНО: raw объявляется ЗДЕСЬ
+                    // raw объявляется ЗДЕСЬ
                     string raw = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     var msg = NetworkMessage.Parse(raw);
 
@@ -94,35 +95,48 @@ namespace SeaBattle.Server
                             continue;
 
                         var result = defenderBoard.Shoot(x, y);
-                        string res = result.ToString().ToLower();
+
+                        // если уже стреляли — просто игнорируем
+                        if (result == ShotResult.AlreadyShot)
+                            return;
+
+                        string payload;
+
+                        if (result == ShotResult.Miss)
+                        {
+                            payload = $"{x},{y},miss";
+                        }
+                        else if (result == ShotResult.Hit)
+                        {
+                            payload = $"{x},{y},hit";
+                        }
+                        else // ShotResult.Sunk
+                        {
+                            var ship = defenderBoard.GetShipAt(x, y);
+
+                            var shipCells = string.Join("|",
+                                ship.Decks.Select(d => $"{d.X}:{d.Y}")
+                            );
+
+                            payload = $"{x},{y},sunk,{shipCells}";
+                        }
 
                         Send(attacker, new NetworkMessage(
                             NetworkCommand.ShotResult,
-                            $"{x},{y},{res}"
+                            payload
                         ));
 
                         Send(defenderClient, new NetworkMessage(
                             NetworkCommand.EnemyShot,
-                            $"{x},{y},{res}"
+                            payload
                         ));
+
 
                         if (defenderBoard.AllShipsSunk())
                         {
                             SendToBoth(new NetworkMessage(NetworkCommand.GameOver, ""));
                         }
                     }
-
-                    //не нужен, наделяет клиента принятием решения
-                    /*else if (msg.Command == NetworkCommand.ShotResult){
-                            TcpClient target =
-                                client == _player1 ? _player2 : _player1;
-
-                            if (target != null && target.Connected)
-                            {
-                                byte[] data = Encoding.UTF8.GetBytes(msg.ToString());
-                                target.GetStream().Write(data, 0, data.Length);
-                            }
-                    }*/
 
                     else if (msg.Command == NetworkCommand.PlaceShips)
                     {
@@ -164,17 +178,6 @@ namespace SeaBattle.Server
 
                         continue;
                     }
-
-
-
-
-                    /* Эхо обратно всем клиентам
-                    //Broadcast(msg.ToString(), client);
-
-                    // Вместо Broadcast с исключением отправителя
-                    var data = Encoding.UTF8.GetBytes(msg.ToString());
-                    stream.Write(data, 0, data.Length);  // отправляем обратно тому же клиенту*/
-
                 }
             }
             catch
@@ -182,33 +185,6 @@ namespace SeaBattle.Server
                 Console.WriteLine("Клиент отключился");
             }
         }
-        //вызывает ошибку, потому что _client заменён на двух игроков
-        /*private void Broadcast(string message, TcpClient sender = null)
-        {
-            byte[] data = Encoding.UTF8.GetBytes(message);
-
-            foreach (var client in _clients)
-            {
-                if (!client.Connected)
-                    continue;
-
-                // Если клиент отправил сообщение сам, то для теста с 1 игроком можно его пропустить,
-                // но если это игра, sender != null — не отправляем обратно отправителю
-                if (sender != null && client == sender)
-                    continue;
-
-                try
-                {
-                    client.GetStream().Write(data, 0, data.Length);
-                }
-                catch
-                {
-                    // Игнорируем ошибки записи, например, если клиент отключился
-                    Console.WriteLine("Не удалось отправить сообщение клиенту");
-                }
-            }
-        }*/
-
         private void SendToBoth(NetworkMessage msg)
         {
             var data = Encoding.UTF8.GetBytes(msg.ToString());

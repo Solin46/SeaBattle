@@ -46,31 +46,6 @@ namespace SeaBattle.Server
             }
         }
 
-        /*private void HandleMessage(NetworkMessage message)
-        {
-            switch (message.Command)
-            {
-                case NetworkCommand.Hello:
-                    Send(new NetworkMessage(NetworkCommand.Hello, "Привет, клиент! Сервер тебя слышит"));
-                    break;
-
-                case NetworkCommand.PlaceShips:
-                    Console.WriteLine($"Клиент расставил корабли: {message.Payload}");
-                    Send(new NetworkMessage(NetworkCommand.PlaceShips, "Корабли приняты"));
-                    break;
-
-                case NetworkCommand.Shoot:
-                    Console.WriteLine($"Клиент стреляет: {message.Payload}");
-                    // Для теста возвращаем рандомный результат
-                    Send(new NetworkMessage(NetworkCommand.ShotResult, "Hit"));
-                    break;
-
-                default:
-                    Send(new NetworkMessage(NetworkCommand.Error, "Неизвестная команда"));
-                    break;
-            }
-        }*/
-
         //для теста передачи и выстрелов:
         private void HandleMessage(NetworkMessage message)
         {
@@ -97,9 +72,6 @@ namespace SeaBattle.Server
                     break;
             }
         }
-
-
-
         public void Send(NetworkMessage msg)
         {
             if (!_client.Connected)
