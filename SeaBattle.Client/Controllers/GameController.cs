@@ -17,9 +17,7 @@ namespace SeaBattle.Client.Controllers
             State = new ClientGameState();
         }
 
-        // ------------------------
         // Расстановка корабля
-        // ------------------------
         public bool PlaceShip(Ship ship)
         {
             return State.MyBoard.PlaceShip(ship);
@@ -44,9 +42,8 @@ namespace SeaBattle.Client.Controllers
             State.IsMyTurn = true; // первый ход за игроком
         }
 
-        // ------------------------
+        
         // Выстрел по противнику
-        // ------------------------
         public ShotResult ShootAtEnemy(int x, int y)
         {
             if (!State.IsMyTurn)
@@ -89,8 +86,5 @@ namespace SeaBattle.Client.Controllers
         {
             State = new ClientGameState();
         }
-
-       
-
     }
 }

@@ -104,8 +104,6 @@ namespace SeaBattle.Client.Views
             };
 
             Controls.Add(_turnLabel);
-
-
         }
 
         private void EnemyCell_Click(object sender, EventArgs e)
@@ -165,22 +163,6 @@ namespace SeaBattle.Client.Views
 
                         break;
                     }
-
-
-                case NetworkCommand.GameStart:
-                    {
-                        /*if (!_roleReceived) //чтобы не было рассинхрона с gamestart до получения роли
-                            return;
-
-                        string first = msg.Payload;
-
-                        _myTurn =
-                            (IsPlayer1 && first == "player1") ||
-                            (!IsPlayer1 && first == "player2");*/
-
-                        break;
-                    }
-
 
                 //апдейт клетки по результату выстрела
                 case NetworkCommand.ShotResult:
@@ -245,15 +227,10 @@ namespace SeaBattle.Client.Views
                         break;
                     }
 
-
                 default:
-                    // остальные команды пока игнорируем
                     break;
             }
         }
-
-
-        //
         public void DrawMyShips((int x, int y)[] shipCoords)
         {
             foreach (var (x, y) in shipCoords)

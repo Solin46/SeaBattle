@@ -2,7 +2,6 @@
 using SeaBattle.Common.Game;
 using SeaBattle.Common.Networking;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -483,7 +482,6 @@ namespace SeaBattle.Server
                 catch { /* игнорируем */ }
             }
         }
-
 
         public void Stop()
         {
