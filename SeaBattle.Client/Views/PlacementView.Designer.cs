@@ -1,4 +1,6 @@
-﻿namespace SeaBattle.Client.Views
+﻿using System.Windows.Forms;
+
+namespace SeaBattle.Client.Views
 {
     partial class PlacementView
     {
@@ -50,7 +52,8 @@
             _shipSizeCombo = new System.Windows.Forms.ComboBox
             {
                 Location = new System.Drawing.Point(20, 20),
-                Width = 80
+                Width = 80,
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
             _shipSizeCombo.Items.AddRange(new object[] { 1, 2, 3, 4 });
             _shipSizeCombo.SelectedIndex = 0;

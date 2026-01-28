@@ -41,7 +41,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
     <Compile Include="Enums\CellState.cs" />
     <Compile Include="Enums\Direction.cs" />
     <Compile Include="Enums\GamePhase.cs" />

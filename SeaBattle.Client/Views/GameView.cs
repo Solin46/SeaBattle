@@ -25,6 +25,11 @@ namespace SeaBattle.Client.Views
         private ViewCellState[,] _myView = new ViewCellState[10, 10];
         private ViewCellState[,] _enemyView = new ViewCellState[10, 10];
 
+        private bool _myTurn;
+        public bool IsPlayer1 { get; private set; }
+        private bool _roleReceived;
+        private Label _turnLabel;
+
 
         public event Action GameFinished;
 
@@ -88,11 +93,25 @@ namespace SeaBattle.Client.Views
                     Controls.Add(btn);
                 }
             }
+            _turnLabel = new Label
+            {
+                AutoSize = true,
+                Left = 20,
+                Top = 0,
+                Font = new Font("Arial", 10, FontStyle.Bold),
+                Text = "Ожидание начала игры..."
+            };
+
+            Controls.Add(_turnLabel);
+
 
         }
 
         private void EnemyCell_Click(object sender, EventArgs e)
         {
+            if (!_myTurn)
+                return;
+
             var btn = (Button)sender;
             var (x, y) = ((int, int))btn.Tag;
 
@@ -103,6 +122,10 @@ namespace SeaBattle.Client.Views
             // Отправляем сообщение на сервер
             var msg = new NetworkMessage(NetworkCommand.Shoot, $"{x},{y}");
             _client.Send(msg);
+
+            //временно
+            Console.WriteLine($"Click. MyTurn={_myTurn}");
+
         }
 
         private void OnServerMessage(NetworkMessage msg)
@@ -121,6 +144,43 @@ namespace SeaBattle.Client.Views
         {
             switch (msg.Command)
             {
+                case NetworkCommand.PlayerRole:
+                    {
+                        IsPlayer1 = msg.Payload == "player1";
+                        _roleReceived = true;
+                        break;
+                    }
+
+                case NetworkCommand.YourTurn:
+                    {
+                        _myTurn = msg.Payload == "true";
+
+                        _turnLabel.Text = _myTurn ? "👉 Ваш ход" : "⏳ Ход противника";
+
+                        _turnLabel.ForeColor = _myTurn ? Color.Green : Color.Gray;
+
+                        //временно
+                        Console.WriteLine("MY TURN = " + _myTurn);
+
+                        break;
+                    }
+
+
+                case NetworkCommand.GameStart:
+                    {
+                        /*if (!_roleReceived) //чтобы не было рассинхрона с gamestart до получения роли
+                            return;
+
+                        string first = msg.Payload;
+
+                        _myTurn =
+                            (IsPlayer1 && first == "player1") ||
+                            (!IsPlayer1 && first == "player2");*/
+
+                        break;
+                    }
+
+
                 //апдейт клетки по результату выстрела
                 case NetworkCommand.ShotResult:
                     {
@@ -133,6 +193,7 @@ namespace SeaBattle.Client.Views
                         if (result == "miss")
                         {
                             UpdateEnemyCell(x, y, ViewCellState.Miss);
+                            //_myTurn = false;
                             break;
                         }
 
@@ -177,8 +238,22 @@ namespace SeaBattle.Client.Views
                     }
 
                 case NetworkCommand.GameOver:
-                    GameFinished?.Invoke();
-                    break;
+                    {
+                        string winner = msg.Payload; // "player1" / "player2"
+
+                        bool iWon =
+                            (IsPlayer1 && winner == "player1") ||
+                            (!IsPlayer1 && winner == "player2");
+
+                        MessageBox.Show(
+                            iWon ? "🎉 Вы победили!" : "😢 Вы проиграли",
+                            "Игра окончена"
+                        );
+
+                        GameFinished?.Invoke();
+                        break;
+                    }
+
 
                 default:
                     // остальные команды пока игнорируем

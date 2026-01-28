@@ -20,11 +20,15 @@ namespace SeaBattle.Server
 
         private GameBoard _board1;
         private GameBoard _board2;
-
+        //готовность игроков
         private bool _player1Ready;
         private bool _player2Ready;
 
-    public void Start(int port = 5000)
+        private TcpClient _currentTurn;   // кто сейчас ходит
+        private TcpClient _firstPlayer;   // кто первым расставился
+
+
+        public void Start(int port = 5000)
         {
             _listener = new TcpListener(IPAddress.Any, port);
             _listener.Start();
@@ -44,19 +48,20 @@ namespace SeaBattle.Server
                 if (_player1 == null)
                 {
                     _player1 = client;
+                    Send(_player1, new NetworkMessage(
+                        NetworkCommand.PlayerRole, "player1"));
+
                     Console.WriteLine("Подключился игрок 1");
                     new Thread(() => ListenClient(_player1)).Start();
                 }
                 else if (_player2 == null)
                 {
                     _player2 = client;
+                    Send(_player2, new NetworkMessage(
+                        NetworkCommand.PlayerRole, "player2"));
+
                     Console.WriteLine("Подключился игрок 2");
                     new Thread(() => ListenClient(_player2)).Start();
-                }
-                else
-                {
-                    Console.WriteLine("Лишний клиент — отключён");
-                    client.Close();
                 }
             }
         }
@@ -75,7 +80,6 @@ namespace SeaBattle.Server
                     if (bytesRead == 0)
                         break;
 
-                    // raw объявляется ЗДЕСЬ
                     string raw = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     var msg = NetworkMessage.Parse(raw);
 
@@ -83,6 +87,12 @@ namespace SeaBattle.Server
 
                     if (msg.Command == NetworkCommand.Shoot)
                     {
+                        if (client != _currentTurn)
+                        {
+                            // не его ход — игнорируем
+                            continue;
+                        }
+
                         var parts = msg.Payload.Split(',');
                         int x = int.Parse(parts[0]);
                         int y = int.Parse(parts[1]);
@@ -94,16 +104,17 @@ namespace SeaBattle.Server
                         if (defenderBoard == null || defenderClient == null)
                             continue;
 
-                        var result = defenderBoard.Shoot(x, y);
+                        /*var result = defenderBoard.Shoot(x, y);
 
                         // если уже стреляли — просто игнорируем
                         if (result == ShotResult.AlreadyShot)
-                            return;
+                            continue;
 
                         string payload;
 
                         if (result == ShotResult.Miss)
                         {
+                            _currentTurn = client == _player1 ? _player2 : _player1;
                             payload = $"{x},{y},miss";
                         }
                         else if (result == ShotResult.Hit)
@@ -131,10 +142,69 @@ namespace SeaBattle.Server
                             payload
                         ));
 
+                        // сервер
+                        Send(attacker, new NetworkMessage(
+                            NetworkCommand.YourTurn, "false"
+                        ));
+
+                        Send(defenderClient, new NetworkMessage(
+                            NetworkCommand.YourTurn, "true"
+                        ));*/
+
+                        var result = defenderBoard.Shoot(x, y);
+
+                        if (result == ShotResult.AlreadyShot)
+                            continue;
+
+                        string payload;
+
+                        if (result == ShotResult.Miss)
+                        {
+                            payload = $"{x},{y},miss";
+                        }
+                        else if (result == ShotResult.Hit)
+                        {
+                            payload = $"{x},{y},hit";
+                        }
+                        else // Sunk
+                        {
+                            var ship = defenderBoard.GetShipAt(x, y);
+                            var shipCells = string.Join("|",
+                                ship.Decks.Select(d => $"{d.X}:{d.Y}")
+                            );
+
+                            payload = $"{x},{y},sunk,{shipCells}";
+                        }
+
+                        // отправка результата
+                        Send(attacker, new NetworkMessage(NetworkCommand.ShotResult, payload));
+                        Send(defenderClient, new NetworkMessage(NetworkCommand.EnemyShot, payload));
+
+                        // ===== ЛОГИКА ХОДОВ =====
+                        bool changeTurn = result == ShotResult.Miss;
+
+                        if (changeTurn)
+                        {
+                            _currentTurn = client == _player1 ? _player2 : _player1;
+                        }
+
+                        Send(_player1, new NetworkMessage(
+                            NetworkCommand.YourTurn,
+                            _currentTurn == _player1 ? "true" : "false"
+                        ));
+
+                        Send(_player2, new NetworkMessage(
+                            NetworkCommand.YourTurn,
+                            _currentTurn == _player2 ? "true" : "false"
+                        ));
+
+
 
                         if (defenderBoard.AllShipsSunk())
                         {
-                            SendToBoth(new NetworkMessage(NetworkCommand.GameOver, ""));
+                            string winner = client == _player1 ? "player1" : "player2";
+
+                            SendToBoth(new NetworkMessage(NetworkCommand.GameOver, winner));
                         }
                     }
 
@@ -171,10 +241,41 @@ namespace SeaBattle.Server
 
                         Console.WriteLine("Игрок прислал расстановку");
 
+                        //первый игрок - первый, отправивший корабли
+                        if (_firstPlayer == null)
+                        {
+                            _firstPlayer = client;
+                        }
+
+                        /*if (_player1Ready && _player2Ready)
+                        {
+                            _currentTurn = _firstPlayer;
+
+                            SendToBoth(new NetworkMessage(
+                                NetworkCommand.GameStart,
+                                _currentTurn == _player1 ? "player1" : "player2"
+                            ));
+                        }*/
+
                         if (_player1Ready && _player2Ready)
                         {
+                            _currentTurn = _firstPlayer;
+
+                            // просто уведомление
                             SendToBoth(new NetworkMessage(NetworkCommand.GameStart, ""));
+
+                            // А ВОТ ЗДЕСЬ — НАЧАЛЬНЫЙ ХОД
+                            Send(_player1, new NetworkMessage(
+                                NetworkCommand.YourTurn,
+                                _currentTurn == _player1 ? "true" : "false"
+                            ));
+
+                            Send(_player2, new NetworkMessage(
+                                NetworkCommand.YourTurn,
+                                _currentTurn == _player2 ? "true" : "false"
+                            ));
                         }
+
 
                         continue;
                     }

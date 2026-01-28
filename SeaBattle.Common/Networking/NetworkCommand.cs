@@ -9,6 +9,8 @@ namespace SeaBattle.Common.Networking
     public enum NetworkCommand
     {
         Hello,        // тест / подключение
+        PlayerRole,
+        YourTurn,
         Error,        // ошибка
         PlaceShips,   // клиент отправил расстановку
         GameStart,    // сервер сообщает: игра началась
