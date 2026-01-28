@@ -199,12 +199,36 @@ namespace SeaBattle.Client
                 return;
             }
 
+            // обработка склеенных сообщений
+            if (msg.Payload != null &&
+                (msg.Payload.StartsWith("falseGameOver") ||
+                 msg.Payload.StartsWith("trueGameOver")))
+            {
+                Console.WriteLine($"ОБРАБОТКА СКЛЕЕННОГО СООБЩЕНИЯ: {msg.Command}|{msg.Payload}");
+
+                // Извлекаем победителя
+                string winner = msg.Payload.Contains("player1") ? "player1" : "player2";
+
+                // Определяем, выиграли ли мы
+                bool isWinner = false;
+                if (_roleReceived)
+                {
+                    isWinner = (_isPlayer1 && winner == "player1") ||
+                              (!_isPlayer1 && winner == "player2");
+                }
+
+                Console.WriteLine($"Победитель: {winner}, Мы выиграли: {isWinner}");
+
+                // Показываем GameOverView
+                ShowGameOver(isWinner);
+                return;
+            }
+
             Log($"SERVER: {msg.Command} | {msg.Payload}");
 
             switch (msg.Command)
             {
                 case NetworkCommand.PlayerRole:
-                    // Сохраняем роль игрока
                     _isPlayer1 = msg.Payload == "player1";
                     _roleReceived = true;
                     Log($"Вы играете за: {msg.Payload}");
@@ -215,10 +239,9 @@ namespace SeaBattle.Client
                     break;
 
                 case NetworkCommand.GameOver:
-                    // Используем сохраненную роль, а не _gameView
-                    bool isWinner = (_roleReceived && msg.Payload == "player1" && _isPlayer1) ||
-                                   (_roleReceived && msg.Payload == "player2" && !_isPlayer1);
-                    ShowGameOver(isWinner);
+                    bool isWinnerNormal = (_roleReceived && msg.Payload == "player1" && _isPlayer1) ||
+                                         (_roleReceived && msg.Payload == "player2" && !_isPlayer1);
+                    ShowGameOver(isWinnerNormal);
                     break;
             }
         }
