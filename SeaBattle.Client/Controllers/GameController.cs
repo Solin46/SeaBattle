@@ -71,6 +71,14 @@ namespace SeaBattle.Client.Controllers
             State.IsMyTurn = !State.IsMyTurn;
         }
 
+        public void ResetBoards()
+        {
+            State.MyBoard = new GameBoard();
+            State.EnemyBoard = new GameBoard();
+            State.Phase = GamePhase.Placement;
+            State.IsMyTurn = false;
+        }
+
         public void FinishGame()
         {
             State.Phase = GamePhase.Finished;

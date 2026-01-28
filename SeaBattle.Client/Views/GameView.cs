@@ -26,10 +26,11 @@ namespace SeaBattle.Client.Views
         private ViewCellState[,] _enemyView = new ViewCellState[10, 10];
 
         private bool _myTurn;
-        public bool IsPlayer1 { get; private set; }
+        public bool IsPlayer1 { get; set; }
         private bool _roleReceived;
         private Label _turnLabel;
 
+        public event Action<NetworkMessage> ServerMessageForwarded;
 
         public event Action GameFinished;
 
@@ -239,7 +240,7 @@ namespace SeaBattle.Client.Views
 
                 case NetworkCommand.GameOver:
                     {
-                        string winner = msg.Payload; // "player1" / "player2"
+                        /*string winner = msg.Payload; // "player1" / "player2"
 
                         bool iWon =
                             (IsPlayer1 && winner == "player1") ||
@@ -250,7 +251,10 @@ namespace SeaBattle.Client.Views
                             "Игра окончена"
                         );
 
-                        GameFinished?.Invoke();
+                        GameFinished?.Invoke();*/
+
+                        // ТОЛЬКО передаем сообщение дальше, не обрабатываем сами
+                        ServerMessageForwarded?.Invoke(msg);
                         break;
                     }
 

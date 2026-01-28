@@ -15,9 +15,19 @@ namespace SeaBattle.Client
         private GameController _controller;
         private GameView _gameView;
         private PlacementView _placementView;
+        private GameOverView _gameOverView;
 
         private Button _connectButton;
         private TextBox _logBox;
+
+        // Добавляем для хранения роли игрока
+        private bool _isPlayer1;
+        private bool _roleReceived = false;
+        //для лога
+        private Panel _logPanel;
+        private Button _toggleLogButton;
+        private bool _logExpanded = true;
+
 
         public MainForm()
         {
@@ -32,9 +42,6 @@ namespace SeaBattle.Client
 
         private void BuildUI()
         {
-            // =========================
-            // Кнопка подключения
-            // =========================
             _connectButton = new Button
             {
                 Text = "Connect to Server",
@@ -46,10 +53,7 @@ namespace SeaBattle.Client
             _connectButton.Click += ConnectButton_Click;
             Controls.Add(_connectButton);
 
-            // =========================
-            // Лог сообщений от сервера
-            // =========================
-            _logBox = new TextBox
+            /*_logBox = new TextBox
             {
                 Multiline = true,
                 Top = 50,
@@ -58,12 +62,79 @@ namespace SeaBattle.Client
                 Height = 350,
                 ScrollBars = ScrollBars.Vertical
             };
-            Controls.Add(_logBox);
+            Controls.Add(_logBox);*/
+
+            // Панель для лога с заголовком
+            _logPanel = new Panel
+            {
+                Top = 50,
+                Left = 10,
+                Width = 360,
+                Height = 400,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            // Заголовок панели
+            var logHeader = new Panel
+            {
+                Height = 30,
+                Dock = DockStyle.Top,
+                BackColor = Color.LightGray
+            };
+
+            var logLabel = new Label
+            {
+                Text = "Network Log",
+                Left = 10,
+                Top = 8,
+                Font = new Font("Arial", 9, FontStyle.Bold)
+            };
+
+            _toggleLogButton = new Button
+            {
+                Text = "▲",
+                Width = 30,
+                Height = 20,
+                Left = 320,
+                Top = 5
+            };
+            _toggleLogButton.Click += ToggleLogButton_Click;
+
+            logHeader.Controls.Add(logLabel);
+            logHeader.Controls.Add(_toggleLogButton);
+
+            // Сам лог
+            _logBox = new TextBox
+            {
+                Multiline = true,
+                Dock = DockStyle.Fill,
+                ScrollBars = ScrollBars.Vertical
+            };
+
+            _logPanel.Controls.Add(_logBox);
+            _logPanel.Controls.Add(logHeader);
+
+            Controls.Add(_logPanel);
         }
 
-        // =========================
-        // Подключение к серверу
-        // =========================
+        private void ToggleLogButton_Click(object sender, EventArgs e)
+        {
+            _logExpanded = !_logExpanded;
+
+            if (_logExpanded)
+            {
+                _logPanel.Height = 400;
+                _toggleLogButton.Text = "▲";
+                _logBox.Visible = true;
+            }
+            else
+            {
+                _logPanel.Height = 30; // Только заголовок
+                _toggleLogButton.Text = "▼";
+                _logBox.Visible = false;
+            }
+        }
+
         private void ConnectButton_Click(object sender, EventArgs e)
         {
             _client = new GameClient();
@@ -76,30 +147,13 @@ namespace SeaBattle.Client
                 _client.Connect("127.0.0.1", 5000);
                 Log("Connected to server.");
 
-                // Создаем GameView и добавляем на форму
-                _gameView = new GameView(_controller, _client)
-                {
-                    Top = 10,
-                    Left = 380,
-                    //Width = 900,
-                    //Height = 500
-                    Anchor = AnchorStyles.Top | AnchorStyles.Left
-                };
-                
-                // Отправляем Hello серверу
+                // Создаем PlacementView для начала
+                CreatePlacementView();
+
                 var helloMsg = new NetworkMessage(NetworkCommand.Hello, "Привет сервер!");
                 _client.Send(helloMsg);
 
-                // после успешного подключения
-                _placementView = new PlacementView(_controller)
-                {
-                    Top = 10,
-                    Left = 380,
-                    Anchor = AnchorStyles.Top | AnchorStyles.Left
-                };
-
-                _placementView.PlacementFinished += OnPlacementFinished;
-                Controls.Add(_placementView);
+                Log("Ожидание игроков...");
 
             }
             catch (Exception ex)
@@ -108,48 +162,24 @@ namespace SeaBattle.Client
             }
         }
 
-        // =========================
-        // Логирование сообщений сервера
-        // =========================
-        private void OnServerMessage(NetworkMessage msg)
+        private void CreatePlacementView()
         {
-            if (InvokeRequired)
+            // Удаляем существующие вьюхи
+            RemoveGameViews();
+
+            _placementView = new PlacementView(_controller)
             {
-                Invoke(new Action(() => OnServerMessage(msg)));
-                return;
-            }
+                Top = 10,
+                Left = 380,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left
+            };
 
-            // логируем всё, что пришло
-            Log($"SERVER: {msg.Command} | {msg.Payload}");
-
-            switch (msg.Command)
-            {
-                case NetworkCommand.Hello:
-                    // можно ничего не делать, просто для отладки
-                    break;
-
-                case NetworkCommand.GameStart:
-                    StartGame();
-                    break;
-
-                case NetworkCommand.ShotResult:
-                    // результат нашего выстрела
-                    _gameView?.HandleShotResult(msg.Payload);
-                    break;
-
-                case NetworkCommand.EnemyShot:
-                    // по нам стреляли
-                    _gameView?.HandleEnemyShot(msg.Payload);
-                    break;
-
-                case NetworkCommand.GameOver:
-                    OnGameFinished();
-                    break;
-            }
+            _placementView.PlacementFinished += OnPlacementFinished;
+            Controls.Add(_placementView);
         }
+
         private void OnPlacementFinished()
         {
-            // 1. отправляем расстановку
             var ships = _controller.State.MyBoard.Ships;
 
             string payload = string.Join(";", ships.Select(
@@ -161,9 +191,53 @@ namespace SeaBattle.Client
             Log("Расстановка отправлена, ждём второго игрока...");
         }
 
+        private void OnServerMessage(NetworkMessage msg)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnServerMessage(msg)));
+                return;
+            }
+
+            Log($"SERVER: {msg.Command} | {msg.Payload}");
+
+            switch (msg.Command)
+            {
+                case NetworkCommand.PlayerRole:
+                    // Сохраняем роль игрока
+                    _isPlayer1 = msg.Payload == "player1";
+                    _roleReceived = true;
+                    Log($"Вы играете за: {msg.Payload}");
+                    break;
+
+                case NetworkCommand.GameStart:
+                    StartGame();
+                    break;
+
+                case NetworkCommand.GameOver:
+                    // Используем сохраненную роль, а не _gameView
+                    bool isWinner = (_roleReceived && msg.Payload == "player1" && _isPlayer1) ||
+                                   (_roleReceived && msg.Payload == "player2" && !_isPlayer1);
+                    ShowGameOver(isWinner);
+                    break;
+            }
+        }
+
         private void StartGame()
         {
-            Controls.Remove(_placementView);
+            if (_placementView != null)
+            {
+                Controls.Remove(_placementView);
+                _placementView.Dispose();
+                _placementView = null;
+            }
+
+            if (_gameOverView != null)
+            {
+                Controls.Remove(_gameOverView);
+                _gameOverView.Dispose();
+                _gameOverView = null;
+            }
 
             _gameView = new GameView(_controller, _client)
             {
@@ -171,30 +245,115 @@ namespace SeaBattle.Client
                 Left = 380,
             };
 
-            _gameView.GameFinished += OnGameFinished;
+            // Передаем сохраненную роль в GameView
+            _gameView.IsPlayer1 = _isPlayer1;
+
+            // Подписываемся на пересылку сообщений от GameView
+            _gameView.ServerMessageForwarded += OnServerMessageFromGameView;
+
             Controls.Add(_gameView);
 
-            // РИСУЕМ СВОИ корабли ИЗ КОНТРОЛЛЕРА
+            // Рисуем свои корабли
             _gameView.DrawMyShips(
                 _controller.State.MyBoard.Ships
                     .SelectMany(s => s.Decks)
                     .Select(d => (d.X, d.Y))
                     .ToArray()
             );
+
+            Log("Игра началась!");
         }
 
+        private void OnServerMessageFromGameView(NetworkMessage msg)
+        {
+            // Обрабатываем сообщения, которые GameView передал нам
+            OnServerMessage(msg);
+        }
+
+        private void ShowGameOver(bool isWinner)
+        {
+            Log($"Показать GameOverView. Победитель: {(isWinner ? "Вы" : "Противник")}");
+
+            // Удаляем GameView
+            if (_gameView != null)
+            {
+                Controls.Remove(_gameView);
+                _gameView.Dispose();
+                _gameView = null;
+            }
+
+            // Показываем GameOverView
+            _gameOverView = new GameOverView(isWinner)
+            {
+                Top = 200,
+                Left = 500,
+                Width = 220,
+                Height = 150
+            };
+
+            _gameOverView.RestartRequested += OnRestartRequested;
+            Controls.Add(_gameOverView);
+
+            Log(isWinner ? "Вы победили!" : "Вы проиграли");
+        }
+
+        private void OnRestartRequested()
+        {
+            Log("Перезапуск игры...");
+
+            // Полностью очищаем состояние
+            _controller.RestartGame();
+            _roleReceived = false;
+            _isPlayer1 = false;
+
+            // Отключаемся от сервера
+            _client?.Disconnect();
+
+            // Удаляем GameOverView
+            if (_gameOverView != null)
+            {
+                Controls.Remove(_gameOverView);
+                _gameOverView.Dispose();
+                _gameOverView = null;
+            }
+
+            // Создаем новое подключение
+            ConnectButton_Click(null, EventArgs.Empty);
+        }
+
+        private void RemoveGameViews()
+        {
+            if (_placementView != null)
+            {
+                Controls.Remove(_placementView);
+                _placementView.Dispose();
+                _placementView = null;
+            }
+
+            if (_gameView != null)
+            {
+                Controls.Remove(_gameView);
+                _gameView.Dispose();
+                _gameView = null;
+            }
+
+            if (_gameOverView != null)
+            {
+                Controls.Remove(_gameOverView);
+                _gameOverView.Dispose();
+                _gameOverView = null;
+            }
+        }
 
         private void Log(string text)
         {
-            _logBox.AppendText(text + Environment.NewLine);
+            _logBox.AppendText(DateTime.Now.ToString("HH:mm:ss") + " - " + text + Environment.NewLine);
         }
 
-        // =========================
-        // Событие окончания игры
-        // =========================
-        private void OnGameFinished()
+        protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            MessageBox.Show("Игра окончена!");
+            _client?.Disconnect();
+            base.OnFormClosing(e);
         }
     }
 }
